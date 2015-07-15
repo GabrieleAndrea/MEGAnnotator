@@ -233,17 +233,20 @@ mkdir temp/single_rRNA ;
 cp input/input.fasta results/${PROJECT}_improved.fasta ;
 
 #genbank creation with rRNA prediction
-grep "^>" results/${PROJECT}_improved.fasta > temp/contigs_name ;
-sed -i 's/>//' temp/contigs_name ;
+grep "^>" results/${PROJECT}_improved.fasta > temp/contigs_name_tmp ;
+sed -i 's/>//' temp/contigs_name_tmp ;
+awk '{print $1}' temp/contigs_name_tmp > temp/contigs_name ;
 sed "s/\tID=/\tlocus_tag=${PROJECT}_/" results/${PROJECT}_annotated_ORFs.gff > temp/annotated_ORFs_locus_tag.gff ;
-awk '/^>/ {printf("\n%s\n",$0);next; } { printf("%s",$0);}  END {printf("\n");}' < results/${PROJECT}_improved.fasta > temp/improved_1line.fasta ;
+awk '/^>/ {printf("\n%s\n",$0);next; } { printf("%s",$0);}  END {printf("\n");}' < results/${PROJECT}_improved.fasta > temp/improved_1line_tmp.fasta ;
+awk '{print $1}' temp/improved_1line_tmp.fasta > temp/improved_1line.fasta ;
 
 while read LTAG3
 do
 let count3=$count3+1
-	grep -P "$LTAG3\t" temp/annotated_ORFs_locus_tag.gff > temp/single_gffs/contig_${count3}.gff
-	grep -A 1 "$LTAG3$" temp/improved_1line.fasta > temp/single_contigs/contig_${count3}.fasta
+	grep "^$LTAG3" temp/annotated_ORFs_locus_tag.gff > temp/single_gffs/contig_${count3}.gff
+	grep -A 1 "^>$LTAG3" temp/improved_1line.fasta > temp/single_contigs/contig_${count3}.fasta
 	seqret -sequence temp/single_contigs/contig_${count3}.fasta -feature -fformat gff -fopenfile temp/single_gffs/contig_${count3}.gff -osformat genbank -auto -outseq temp/single_gbks/contig_${count3}_tmp.gbk
+	sed -i "s/${LTAG3}\://" temp/single_gbks/contig_${count3}_tmp.gbk
 	grep -v "/note" temp/single_gbks/contig_${count3}_tmp.gbk > temp/single_gbks/contig_${count3}.gbk
 
 	rnammer -S bac temp/single_contigs/contig_${count3}.fasta -m tsu,ssu,lsu -gff temp/single_rRNA/rRNA_${count3}.gff
@@ -283,9 +286,16 @@ let count3=$count3+1
 		sed -i 's/23s/23s ribosomal RNA/' temp/premature_contig_${count3}_rRNA.gff
 		rm temp/single_rRNA/*.rrna
 
-		cat temp/single_gbks/contig_${count3}.gbk | head -n 2 > temp/head_${count3}.gbk
-		cat temp/single_gbks/contig_${count3}.gbk | tail -n +3 > temp/tail_${count3}.gbk
-		cat temp/head_${count3}.gbk temp/premature_contig_${count3}_rRNA.gff temp/tail_${count3}.gbk > temp/single_gbks/contig_${count3}_with_rRNA.gbk
+		if [ -s temp/single_gffs/contig_${count3}.gff ] ; then
+			cat temp/single_gbks/contig_${count3}.gbk | head -n 2 > temp/head_${count3}.gbk
+			cat temp/single_gbks/contig_${count3}.gbk | tail -n +3 > temp/tail_${count3}.gbk
+			cat temp/head_${count3}.gbk temp/premature_contig_${count3}_rRNA.gff temp/tail_${count3}.gbk > temp/single_gbks/contig_${count3}_with_rRNA.gbk
+		else
+			cat temp/single_gbks/contig_${count3}.gbk | head -n 1 > temp/head_${count3}.gbk
+			echo "FEATURES             Location/Qualifiers" >> temp/head_${count3}.gbk
+			cat temp/single_gbks/contig_${count3}.gbk | tail -n +2 > temp/tail_${count3}.gbk
+			cat temp/head_${count3}.gbk temp/premature_contig_${count3}_rRNA.gff temp/tail_${count3}.gbk > temp/single_gbks/contig_${count3}_with_rRNA.gbk
+		fi
 	fi
 	
 	if [ $count3 -eq 1 ] ; then
