@@ -16,41 +16,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#Info
-FILE=lib/INFO
-if zenity --text-info --title="MEGAnnotator" --filename=$FILE --checkbox="I read and accept the terms." --width=550 --height=650
-	then echo Starting MEGAnnotator settings selection
-	else zenity --warning --title="MEGAnnotator stopped" --text="MEGAnnotator has been interrupted.\nPlease restart the script and follow the instructions."; exit
-fi
-
-#Analysis selection
-ANALYSIS=$(zenity --list --radiolist --title "MEGAnnotator" --text "What kind of analysis do you want to perform?" --hide-header --column "Select" --column "Analyses" FALSE "Genomic_Assembly" FALSE "Metagenomic_Assembly" FALSE "Prediction_and_Annotation_only")
-if [ $ANALYSIS = 'Genomic_Assembly' ] ; then
-	echo $ANALYSIS selected
-elif [ $ANALYSIS = 'Metagenomic_Assembly' ] ; then
-	echo $ANALYSIS selected ;
-	./metagenomic.sh ;
-	exit
-elif [ $ANALYSIS = 'Prediction_and_Annotation_only' ] ; then
-	echo $ANALYSIS selected ;
-	./annotation.sh ;
-	exit
-else
-	zenity --error --title="MEGAnnotator Error" --text="No option were chosed.\nPlease restart the script and follow the instructions."; exit
-fi
-
-#Assembler choice
-ASSEMBLER=$(zenity --list --radiolist --title "MEGAnnotator" --text "What kind of assembler do you want to use?" --hide-header --column "Select" --column "Analyses" FALSE "ABySS" FALSE "MIRA")
-if [ $ASSEMBLER = 'MIRA' ] ; then
-	echo $ASSEMBLER selected
-elif [ $ASSEMBLER = 'ABySS' ] ; then
-	echo $ASSEMBLER selected ;
-	./genomic.sh ;
-	exit
-else
-	zenity --error --title="MEGAnnotator Error" --text="No option were chosed.\nPlease restart the script and follow the instructions."; exit
-fi
-
 #Technology selection
 TECHNOLOGY=$(zenity --list --radiolist --title "MEGAnnotator" --text "What kind of technology do you have used?" --hide-header --column "Select" --column "Technology" FALSE "454" FALSE "IonTorrent" FALSE "Illumina" FALSE "Other")
 if [ $TECHNOLOGY = '454' ] ; then
@@ -113,28 +78,24 @@ else
 	echo No reference has been selected
 fi
 
+#K-mer
+KMER=$(zenity --list --radiolist --title "MEGAnnotator" --text "Chose the k-mer size to use." --hide-header --column "Select" --column "Kmer" FALSE "16" FALSE "32" TRUE "64" FALSE "96")
+if [ $KMER = '16' ] ; then
+	echo $KMER selected ;
+elif [ $KMER = '32' ] ; then
+	echo $KMER selected ;
+elif [ $KMER = '64' ] ; then
+	echo $KMER selected ;
+elif [ $KMER = '96' ] ; then
+	echo $KMER selected ;
+else
+	zenity --error --title="MEGAnnotator Error" --text="No option were chosed.\nPlease restart the script and follow the instructions."; exit
+fi
+
 #Contigs selection parameters
-if [ $ANALYSIS = 'Genomic_Assembly' ] ; then
-	zenity --question --title="Contigs selection parameters" --ok-label="Parameters are fine" --cancel-label="Edit Parameters" --text="Contigs selection parameters:\n- Minimum contig length = 1000\n- Minimum reads per contig 100\n- Minimum contig coverage = 33% of the final assemble average\nEdit values if necessary."
-	if [ $? = 0 ] ; then
-		CLENGTH=1000 ;
-		RCONTIG=100 ;
-		echo Minimum contigs length $CLENGTH ;
-		echo Minimum reads per contig $RCONTIG ;
-	else 
-		if CLENGTH=$(zenity --entry --title="Minimum contigs length" --text="Enter the minimum contigs length.\nPlease, enter numeric characters only\n(e.g. 2000 - 1000 - 200).")
-			then echo Minimum contigs length $CLENGTH
-			else zenity --warning --title="MEGAnnotator stopped" --text="MEGAnnotator has been interrupted.\nPlease restart the script and follow the instructions."; exit
-		fi
-		if RCONTIG=$(zenity --entry --title="Minimum reads per contig" --text="Enter the minimum reads per contig.\nPlease, enter numeric characters only\n(e.g. 500 - 100 - 10).")
-			then echo Minimum contigs length $RCONTIG
-			else zenity --warning --title="MEGAnnotator stopped" --text="MEGAnnotator has been interrupted.\nPlease restart the script and follow the instructions."; exit
-		fi
-		if zenity --info --title="Minimum contig coverage" --text="The minimum contigs coverage is calculated at the end of the assembly.\nThe variable cannot be changed."
-			then echo Minimum contig coverage = 33% of the final assemble average
-			else zenity --warning --title="MEGAnnotator stopped" --text="MEGAnnotator has been interrupted.\nPlease restart the script and follow the instructions."; exit
-		fi
-	fi
+if CLENGTH=$(zenity --entry --title="Minimum contigs length" --text="Enter the minimum contigs length.\nPlease, enter numeric characters only\n(e.g. 1000 - 500 - 200).")
+	then echo Minimum contigs length $CLENGTH
+	else zenity --warning --title="MEGAnnotator stopped" --text="MEGAnnotator has been interrupted.\nPlease restart the script and follow the instructions."; exit
 fi
 
 #Databases selection
@@ -161,7 +122,7 @@ else
 	zenity --error --title="MEGAnnotator Error" --text="No option were chosed.\nPlease restart the script and follow the instructions."; exit
 fi
 
-lib/./genome_counter.sh &
+lib/./genome_counter_abyss.sh &
 
 #Files selection
 mkdir temp ;
@@ -175,36 +136,29 @@ echo $ANALYSIS > temp/assembly_type ;
 echo $ASSEMBLER > temp/assembler_type ;
 echo $READS > temp/reads_type ;
 echo $TECHNOLOGY > temp/thecnology_type ;
+echo $KMER > temp/kmer_number ;
 echo $RAPSEARCHDB > temp/database_rapsearch ;
 echo $PFAMDB > temp/database_pfam ;
 echo $THRESHOLD > temp/pfam_threshold ;
 
 #Organizing input
 mkdir input ;
+mkdir ${PROJECT}_assembly ;
 if [ -e temp/reference_genome ] ; then 
 	cp $REFERENCE input/reference.fasta
 fi
-cp bin/mira4.0.2 mira ;
 cp temp/project_name temp/project_name_edited ;
 sed -i '1iproject =' temp/project_name_edited ;
 sed -i ':a;N;$!ba;s/\n/ /g' temp/project_name_edited ;
 
 if [ $TECHNOLOGY = '454' ] ; then
-	cp lib/454_manifest.conf manifest.conf ;
-	sed -i '5r temp/project_name_edited' manifest.conf ;
-	cp $INPUTFASTQ input/input.fastq ;
+	cp $INPUTFASTQ ${PROJECT}_assembly/input.fastq ;
 elif [ $TECHNOLOGY = 'IonTorrent' ] ; then
-	cp lib/iontorrent_manifest.conf manifest.conf ;
-	sed -i '5r temp/project_name_edited' manifest.conf ;
-	cp $INPUTFASTQ input/input.fastq ;
+	cp $INPUTFASTQ ${PROJECT}_assembly/input.fastq ;
 elif [ $TECHNOLOGY = 'Illumina' ] ; then
 	if [ $READS = 'Single-Read' ] ; then
-		cp lib/illumina_single_manifest.conf manifest.conf ;
-		sed -i '5r temp/project_name_edited' manifest.conf ;
-		cp $INPUTFASTQ input/input.fastq ;
+		cp $INPUTFASTQ ${PROJECT}_assembly/input.fastq ;
 	else
-		cp lib/illumina_paired_manifest.conf manifest.conf ;
-		sed -i '5r temp/project_name_edited' manifest.conf ;
 		cp temp/fastq_data temp/paired_data ;
 		sed -i 's/|/\n/' temp/paired_data ;
 		split -l 1 temp/paired_data temp/paired ;
@@ -217,83 +171,81 @@ elif [ $TECHNOLOGY = 'Illumina' ] ; then
 		cat temp/input_check_1 | gawk '{print $1}' > temp/input_check_2 ;
 		grep "/1" temp/input_check_2  > temp/input_check_3 ;
 		if [ -s temp/input_check_3 ] ; then
-			mv temp/input1_temp.fastq input/input1.fastq ;
-			mv temp/input2_temp.fastq input/input2.fastq ;	
+			mv temp/input1_temp.fastq ${PROJECT}_assembly/input1.fastq ;
+			mv temp/input2_temp.fastq ${PROJECT}_assembly/input2.fastq ;	
 		else
 			cat temp/input1_temp.fastq | paste - - | sed 's/^\(\S*\)/\1\/1/' | tr "\t" "\n" > temp/input1.fastq ;
 			cat temp/input2_temp.fastq | paste - - | sed 's/^\(\S*\)/\1\/2/' | tr "\t" "\n" > temp/input2.fastq ;
-			mv temp/input1.fastq input/input1.fastq ;
-			mv temp/input2.fastq input/input2.fastq ;			
+			mv temp/input1.fastq ${PROJECT}_assembly/input1.fastq ;
+			mv temp/input2.fastq ${PROJECT}_assembly/input2.fastq ;			
 		fi
-		
-		zenity --question --title="Reads Length" --ok-label="Length is fine" --cancel-label="Edit Length" --text="Illumina reads are set as 250 bases.\nEdit value if necessary."
-		if [ $? = 0 ] ; then
-			echo manifest.conf ready
-		else 
-			gedit manifest.conf ;
-			if zenity --info --title="MEGAnnotator" --ok-label="Start MEGAnnotator" --text="Start MEGAnnotator when you are ready."
-				then echo Starting MEGAnnotator
-				else zenity --warning --title="MEGAnnotator stopped" --text="MEGAnnotator has been interrupted.\nPlease restart the script and follow the instructions."; 
-					rm -R input ; rm -R temp ; rm mira ; rm manifest.conf ; exit
-			fi
+
+		if zenity --info --title="MEGAnnotator" --ok-label="Start MEGAnnotator" --text="Start MEGAnnotator when you are ready."
+			then echo Starting MEGAnnotator
+			else zenity --warning --title="MEGAnnotator stopped" --text="MEGAnnotator has been interrupted.\nPlease restart the script and follow the instructions."; 
+				rm -R input ; rm -R temp ; exit
 		fi
+
 	fi
 else
-	cp lib/other_manifest.conf manifest.conf ;
-	sed -i '5r temp/project_name_edited' manifest.conf ;
-	cp $INPUTFASTQ input/input.fastq ;
-	if zenity --info --title="MEGAnnotator" --ok-label="Open manifest.conf" --text="Please edit the manifest.conf file.\nThen come back to MEGAnnotator."
-		then echo Editing manifest.conf
-		else zenity --warning --title="MEGAnnotator stopped" --text="MEGAnnotator has been interrupted.\nPlease restart the script and follow the instructions."; 
-			rm -R input ; rm -R temp ; rm mira ; rm manifest.conf ; exit
-	fi
-	gedit manifest.conf ;
+	cp $INPUTFASTQ ${PROJECT}_assembly/input.fastq ;
+
 	if zenity --info --title="MEGAnnotator" --ok-label="Start MEGAnnotator" --text="Start MEGAnnotator when you are ready."
 		then echo Starting MEGAnnotator
 		else zenity --warning --title="MEGAnnotator stopped" --text="MEGAnnotator has been interrupted.\nPlease restart the script and follow the instructions."; 
-			rm -R input ; rm -R temp ; rm mira ; rm manifest.conf ; exit
+			rm -R input ; rm -R temp ; exit
 	fi
 fi
 
 #=====================================================================================================================================================================================#
 echo "#§#§#	Phase 1: Genome Assembly	#§#§#" ;
-./mira -t $NTHREADS manifest.conf > mira.log ;
-
-cd ${PROJECT}_assembly ;
-rm -R ${PROJECT}_d_tmp ; rm -R ${PROJECT}_d_chkpt ;
-cd .. ;
-rm manifest.conf ; rm mira ;
+if [ -e ${PROJECT}_assembly/input.fastq ] ; then
+	echo SingleEnd > temp/input_abyss ;
+	abyss-pe -C ${PROJECT}_assembly k=$KMER n=10 j=$NTHREADS in=input.fastq name=$PROJECT ;
+else
+	echo PairedEnd > temp/input_abyss ;
+	abyss-pe -C ${PROJECT}_assembly k=$KMER n=10 j=$NTHREADS in='input1.fastq input2.fastq' name=$PROJECT ;
+fi
 
 #=====================================================================================================================================================================================#
 echo "#§#§#     Phase 2: Contigs selection     #§#§#" ;
 mkdir results ;
-grep -v "IUPAC" ${PROJECT}_assembly/${PROJECT}_d_info/${PROJECT}_info_contigstats.txt > temp/contigs.txt ;
-cut -f1 temp/contigs.txt > temp/contigs2.txt ;
 
-#average calculation
-grep "total coverage" ${PROJECT}_assembly/${PROJECT}_d_info/${PROJECT}_info_assembly.txt | sed 's/\ \ Avg\.\ total coverage\:\ //' > temp/average.txt ;
-AVERAGE=$(cat temp/average.txt) ;
-sed -i 's/\./\t/' temp/average.txt ;
-cut -f1 temp/average.txt > temp/average2.txt ;
-AVERAGE2=$(cat temp/average2.txt) ;
-AVE=$((AVERAGE2/3)) ;
+grep "NNNNN" ${PROJECT}_assembly/${PROJECT}-6.fa > temp/gap_control_contigs ;
 
-#miraconvert
-bin/./miraconvert -t fasta -n temp/contigs2.txt -x $CLENGTH -y $AVE -z $RCONTIG ${PROJECT}_assembly/${PROJECT}_d_results/${PROJECT}_out.maf temp/${PROJECT}_LargeContigs_out > temp/ec.log ;
+if [ -s temp/gap_control_contigs ] ; then
+	if [ -e ${PROJECT}_assembly/input.fastq ] ; then
+		abyss-sealer -P 10 -k 90 -k 80 -k 70 -k 60 -k 50 -k 40 -k 30 -j $NTHREADS -o temp/${PROJECT} -S ${PROJECT}_assembly/${PROJECT}-6.fa ${PROJECT}_assembly/input.fastq ;
+	else
+		abyss-sealer -P 10 -k 90 -k 80 -k 70 -k 60 -k 50 -k 40 -k 30 -j $NTHREADS -o temp/${PROJECT} -S ${PROJECT}_assembly/${PROJECT}-6.fa ${PROJECT}_assembly/input1.fastq ${PROJECT}_assembly/input2.fastq ;
+	fi
+else
+	cp ${PROJECT}_assembly/${PROJECT}-6.fa temp/${PROJECT}_scaffold.fa ;
+fi
+
+awk -v largeonly="$CLENGTH" '!/^>/ { next } { getline seq } length(seq) >= largeonly { print $0 "\n" seq }' temp/${PROJECT}_scaffold.fa > temp/${PROJECT}_LargeContigs.fasta ;
+
+grep "NNNNN" temp/${PROJECT}_LargeContigs.fasta > temp/gap_control_largecontigs ;
 
 #=====================================================================================================================================================================================#
 echo "#§#§#     Phase 3: Alignment vs. reference genome     #§#§#" ;
 cp -a bin/mauve_2.3.1/. temp/ ;
 if [ -e input/reference.fasta ] ; then
-	cd temp ;
-	java -Xmx2g -cp Mauve.jar org.gel.mauve.contigs.ContigOrderer -output mauve -ref ../input/reference.fasta -draft ${PROJECT}_LargeContigs_out_AllStrains.unpadded.fasta ;
-	cd mauve ;
-	MAUVEFOLDER=$(find . -exec stat \{} --printf="%y\t%n\n" \; | sort -n -r | head -1 | awk '{print $4}' | sed 's/\.\///') ;
-	cd $MAUVEFOLDER ;
-	cp *.tab ../../unpadded_contigs.tab ;
-	mkdir ../../../results/mauve_aligment ;
-	cp * ../../../results/mauve_aligment ;
-	cd .. ; cd .. ; cd .. ;
+	if [ -s temp/gap_control_contigs ] ; then
+		echo Gaps identified - Proceeding with improvement of quality output
+		rm input/reference.fasta ;
+		echo Gaps identified - Mauve cannot perform the alignment against the reference genome > results/WARNING.log ;
+	else
+		cd temp ;
+		java -Xmx2g -cp Mauve.jar org.gel.mauve.contigs.ContigOrderer -output mauve -ref ../input/reference.fasta -draft ${PROJECT}_LargeContigs.fasta ;
+		cd mauve ;
+		MAUVEFOLDER=$(find . -exec stat \{} --printf="%y\t%n\n" \; | sort -n -r | head -1 | awk '{print $4}' | sed 's/\.\///') ;
+		cd $MAUVEFOLDER ;
+		cp *.tab ../../unpadded_contigs.tab ;
+		mkdir ../../../results/mauve_aligment ;
+		cp * ../../../results/mauve_aligment ;
+		cd .. ; cd .. ; cd .. ;
+	fi
 else
 	echo No reference identified - Proceeding with improvement of quality output
 fi
@@ -322,7 +274,7 @@ if [ -e input/reference.fasta ] ; then
 	sed -i 's/$/\ /' temp/ordered_forward_names ;
 	sed -i 's/$/\ /' temp/ordered_tab_names ;
 
-	awk '/^>/ {printf("\n%s\n",$0);next; } { printf("%s",$0);}  END {printf("\n");}' < temp/${PROJECT}_LargeContigs_out_AllStrains.unpadded.fasta > temp/${PROJECT}_contigs_1line.fasta ;
+	awk '/^>/ {printf("\n%s\n",$0);next; } { printf("%s",$0);}  END {printf("\n");}' < temp/${PROJECT}_LargeContigs.fasta > temp/${PROJECT}_contigs_1line.fasta ;
 	sed -i 's/$/\ /' temp/${PROJECT}_contigs_1line.fasta ;
 
 	while read COMPLEMENT
@@ -355,7 +307,7 @@ fi
 if [ -f temp/unpadded_contigs.tab ] ; then
 	cp temp/${PROJECT}_multifasta.fasta results/${PROJECT}_multifasta.fasta
 else
-	cp temp/${PROJECT}_LargeContigs_out_AllStrains.unpadded.fasta results/${PROJECT}_multifasta.fasta
+	cp temp/${PROJECT}_LargeContigs.fasta results/${PROJECT}_multifasta.fasta
 fi
 
 #=====================================================================================================================================================================================#
@@ -367,14 +319,14 @@ mkdir results/improvement_quality_results ;
 cp results/${PROJECT}_multifasta.fasta temp/snp/templato.fasta ;
 bwa index temp/snp/templato.fasta ;
 
-if [ -e input/input1.fastq ] ; then
-	bwa mem -t $NTHREADS temp/snp/templato.fasta input/input1.fastq input/input2.fastq > temp/snp/${PROJECT}_aligned.sam ; sleep 1s ;
+if [ -e ${PROJECT}_assembly/input1.fastq ] ; then
+	bwa mem -t $NTHREADS temp/snp/templato.fasta ${PROJECT}_assembly/input1.fastq ${PROJECT}_assembly/input2.fastq > temp/snp/${PROJECT}_aligned.sam ; sleep 1s ;
 	samtools view -@ $NTHREADS -S -h -b temp/snp/${PROJECT}_aligned.sam > temp/snp/${PROJECT}.bam ; sleep 1s ;
 	samtools sort -@ $NTHREADS temp/snp/${PROJECT}.bam  temp/snp/sorted${PROJECT} ; sleep 1s ;
 	samtools index temp/snp/sorted${PROJECT}.bam ; sleep 1s ;
 	samtools mpileup -f temp/snp/templato.fasta temp/snp/sorted${PROJECT}.bam > temp/snp/sorted${PROJECT}mpileup.bam ;
 else
-	bwa mem -t $NTHREADS temp/snp/templato.fasta input/input.fastq > temp/snp/${PROJECT}_aligned.sam ; sleep 1s ;
+	bwa mem -t $NTHREADS temp/snp/templato.fasta ${PROJECT}_assembly/input.fastq > temp/snp/${PROJECT}_aligned.sam ; sleep 1s ;
 	samtools view -@ $NTHREADS -S -h -b temp/snp/${PROJECT}_aligned.sam > temp/snp/${PROJECT}.bam ; sleep 1s ;
 	samtools sort -@ $NTHREADS temp/snp/${PROJECT}.bam  temp/snp/sorted${PROJECT} ; sleep 1s ;
 	samtools index temp/snp/sorted${PROJECT}.bam ; sleep 1s ;
@@ -784,6 +736,7 @@ mv results/${PROJECT}_improved.fasta results/${PROJECT}_multifasta.fsa ;
 
 #cleaning
 rm -R input ;
+rm ${PROJECT}_assembly/*.fastq ;
 rm -R temp ;
 rm results/${PROJECT}_annotated_ORFs.gff ;
 rm results/${PROJECT}_multifasta.fasta ;
@@ -791,7 +744,6 @@ rm results/${PROJECT}_tRNA ;
 rm results/improvement_quality_results/${PROJECT}_0.89_validation_noIUPC.vcf ;
 rm results/improvement_quality_results/${PROJECT}_0.89_validation_noIUPC.vcf.idx ;
 mv results/contigs_reference_tab results/improvement_quality_results/. ;
-mv mira.log ${PROJECT}_assembly/. ;
 mv results ${PROJECT}_results ;
 
 echo "#§#§#     Prediction Complete     #§#§#" ;

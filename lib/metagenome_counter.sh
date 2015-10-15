@@ -71,9 +71,8 @@ done
 echo "99"
 echo "# MEGAnnotator ends" ; sleep 1
 echo "100"
-) | zenity --progress --auto-close --no-cancel --title="MEGAnnotator" --text="Setting tings up..." --percentage=0
+) | zenity --progress --title="MEGAnnotator" --text="Setting tings up..." --ok-label="Done" --cancel-label="Hide counter" --percentage=0
 if [ "$?" = -1 ] ; then
 	zenity --error --text="MEGAnnotator ends improperly.\nPlease verify the data quality."
 fi
-zenity --info --title="MEGAnnotator" --text="Assembly and Annotation completed"
 

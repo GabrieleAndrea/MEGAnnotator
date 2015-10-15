@@ -44,6 +44,20 @@ if PFAMDB=$(zenity --file-selection --title="Select Pfam-A.hmm database file")
 	else zenity --warning --title="ASAP stopped" --text="ASAP has been interrupted.\nPlease restart the script and follow the instructions."; exit
 fi
 
+#HMM thresholding selection
+THRESHOLD=$(zenity --list --radiolist --title "MEGAnnotator" --text "What kind of hmmscan threshold do you want to use?" --hide-header --column "Select" --column "Threshold" TRUE "E-value" FALSE "cut_ga" FALSE "cut_nc" FALSE "cut_tc")
+if [ $THRESHOLD = 'E-value' ] ; then
+	echo $THRESHOLD thresholding selected
+elif [ $THRESHOLD = 'cut_ga' ] ; then
+	echo $THRESHOLD thresholding selected
+elif [ $THRESHOLD = 'cut_nc' ] ; then
+	echo $THRESHOLD thresholding selected
+elif [ $THRESHOLD = 'cut_tc' ] ; then
+	echo $THRESHOLD thresholding selected
+else
+	zenity --error --title="MEGAnnotator Error" --text="No option were chosed.\nPlease restart the script and follow the instructions."; exit
+fi
+
 lib/./annotation_counter.sh &
 
 #Files selection
@@ -53,6 +67,7 @@ echo $FASTAFILE > temp/fasta_data ;
 echo $NTHREADS > temp/n_threads ;
 echo $RAPSEARCHDB > temp/database_rapsearch ;
 echo $PFAMDB > temp/database_pfam ;
+echo $THRESHOLD > temp/pfam_threshold ;
 
 #Organizing input
 mkdir input ;
@@ -133,7 +148,15 @@ sed -i 's/\ \t\ /\t/g' temp/first_hit_rapsearch.txt ;
 
 #=====================================================================================================================================================================================#
 echo "#§#§#     Phase 7: pfam prediction     #§#§#" ;
-hmmscan --cpu $NTHREADS -E 1e-10 --tblout temp/pfam_annotation_tbl -o temp/pfam_annotation $PFAMDB temp/aaORFs.fasta ;
+if [ "$THRESHOLD" = "E-value" ] ; then
+	hmmscan --cpu $NTHREADS -E 1e-10 --tblout temp/pfam_annotation_tbl -o temp/pfam_annotation $PFAMDB temp/aaORFs.fasta ;
+elif [ "$THRESHOLD" = "cut_ga" ] ; then
+	hmmscan --cpu $NTHREADS --cut_ga --tblout temp/pfam_annotation_tbl -o temp/pfam_annotation $PFAMDB temp/aaORFs.fasta ;
+elif [ "$THRESHOLD" = "cut_nc" ] ; then
+	hmmscan --cpu $NTHREADS --cut_nc --tblout temp/pfam_annotation_tbl -o temp/pfam_annotation $PFAMDB temp/aaORFs.fasta ;
+elif [ "$THRESHOLD" = "cut_tc" ] ; then
+	hmmscan --cpu $NTHREADS --cut_tc --tblout temp/pfam_annotation_tbl -o temp/pfam_annotation $PFAMDB temp/aaORFs.fasta ;
+fi
 
 #output modding
 grep -v "^#" temp/pfam_annotation_tbl > temp/pfam_annotation_tbl2 ;
@@ -401,13 +424,17 @@ cat temp/union.gbk | head -n 2 > temp/head_union.gbk ;
 cat temp/union.gbk | tail -n +3 > temp/tail_union.gbk ;
 cat temp/head_union.gbk temp/fasta_features_edit.gff temp/premature_tRNA.gff temp/tail_union.gbk > results/${PROJECT}.gbk ; sleep 2s ;
 
+#additional file formats
+seqret results/${PROJECT}.gbk results/${PROJECT}.gff3 --feature -osf gff3 ;
+seqret results/${PROJECT}.gbk results/${PROJECT}.embl --feature -osf embl ;
+java -cp bin/readseq.jar run -feat=CDS,rRNA,tRNA -format=19 results/${PROJECT}.gbk -o results/${PROJECT}.xml ;
+
 #cleaning
 rm -R input ;
 rm -R temp ;
-rm results/${PROJECT}_improved.fasta ;
 rm results/${PROJECT}_annotated_ORFs.gff ;
-rm results/${PROJECT}_multifasta.fasta ;
 rm results/${PROJECT}_tRNA ;
+rm results/${PROJECT}_improved.fasta ;
 mv results ${PROJECT}_results ;
 
 echo "#§#§#     Prediction Complete     #§#§#" ;

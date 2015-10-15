@@ -435,6 +435,11 @@ cat temp/union.gbk | head -n 2 > temp/head_union.gbk ;
 cat temp/union.gbk | tail -n +3 > temp/tail_union.gbk ;
 cat temp/head_union.gbk temp/fasta_features_edit.gff temp/premature_tRNA.gff temp/tail_union.gbk > results/${PROJECT}.gbk ; sleep 2s ;
 
+#additional file formats
+seqret results/${PROJECT}.gbk results/${PROJECT}.gff3 --feature -osf gff3 ;
+seqret results/${PROJECT}.gbk results/${PROJECT}.embl --feature -osf embl ;
+java -cp bin/readseq.jar run -feat=CDS,rRNA,tRNA -format=19 results/${PROJECT}.gbk -o results/${PROJECT}.xml ;
+
 #cleaning
 rm -R input ;
 rm -R temp ;
